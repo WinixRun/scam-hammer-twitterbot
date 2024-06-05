@@ -120,15 +120,11 @@ app.get('/aprobar/:token', async (req, res) => {
 const publicarAprobados = async () => {
   const aprobados = await Report.find({ aprobado: true });
   for (const report of aprobados) {
-    const mensaje = `🤖 Mensaje automático 
-🚨 NUEVA CAMPAÑA DE PHISHING DETECTADA 🚨
-
+    const mensaje = `🚨 NUEVA CAMPAÑA DE PHISHING DETECTADA 🚨
+Atacante: ${report.telefono}
 Consejos: 
-
-☎️ Bloquea el número atacante: ${report.telefono}
-
+☎️ Bloquea el número de teléfono.
 🔁 Retweetea para avisar a más gente.
-
 🔨 Reporta los SMS maliciosos que te lleguen en 
 https://scam-hammer.com/`;
     try {

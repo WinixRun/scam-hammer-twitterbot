@@ -5,7 +5,7 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const axios = require('axios');
 const crypto = require('crypto');
-const { analyzeUrl, getCountryInfo } = require('.utils/siteAnalysis');
+const { analyzeUrl, getCountryInfo } = require('./utils/siteAnalysis');
 
 // Configuración de la API de Twitter
 const twitterClient = new TwitterApi({

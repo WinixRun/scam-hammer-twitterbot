@@ -7,10 +7,11 @@ const getTitle = async (url) => {
   console.log(`Fetching title for URL: ${url}`);
   try {
     const response = await axios.get(url, { maxRedirects: 10, timeout: 5000 });
-    const match = response.data.match(/<title>(.*?)<\/title>/);
-    if (match && match[1]) {
-      console.log(`Title found: ${match[1]}`);
-      return match[1];
+    const $ = cheerio.load(response.data);
+    const title = $('title').text();
+    if (title) {
+      console.log(`Title found: ${title}`);
+      return title;
     }
   } catch (error) {
     console.error('Error fetching URL title:', error.message);
@@ -25,7 +26,8 @@ const analyzeUrl = async (url) => {
   let urlCheck = false;
   let titleCheck = false;
 
-  for (const { keyword, brand } of companyList) {
+  // Check URL against company list
+  for (const { keyword, brand } of companyList.companies) {
     if (lowerCaseUrl.includes(keyword)) {
       identifiedBrand = brand;
       urlCheck = true;
@@ -36,10 +38,11 @@ const analyzeUrl = async (url) => {
     }
   }
 
+  // If no brand identified, check the title of the page
   if (!identifiedBrand) {
     const title = await getTitle(url);
     if (title) {
-      for (const { keyword, brand } of companyList) {
+      for (const { keyword, brand } of companyList.companies) {
         if (title.toLowerCase().includes(keyword)) {
           identifiedBrand = brand;
           titleCheck = true;
@@ -64,8 +67,9 @@ const getCountryInfo = (phoneNumber) => {
     return { country: 'España', flag: '🇪🇸' };
   }
 
-  const country = countryList.find((country) =>
-    phoneNumber.startsWith(country.prefix)
+  const prefix = phoneNumber.slice(1, 3);
+  const country = countryList.find(
+    (country) => country.prefix === `+${prefix}`
   );
   return country
     ? { country: country.country, flag: country.flag }

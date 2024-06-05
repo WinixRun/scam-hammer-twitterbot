@@ -91,9 +91,11 @@ Report.watch().on('change', async (change) => {
       newReport.telefono
     } ${
       countryInfo.flag
-    }\nAprobar: https://scam-hammer.com/aprobar/${tokenValue}\n\nAnálisis:\nURL: ${
-      analysis.urlCheck ? '✅' : '❌'
-    }\nTítulo: ${analysis.titleCheck ? '✅' : '❌'}`;
+    }\nAprobar: https://scam-hammer.com/aprobar/${tokenValue}\n\nAnálisis:\nEntidad: ${
+      analysis.identifiedBrand ? analysis.identifiedBrand : 'Desconocida'
+    }\nURL: ${analysis.urlCheck ? '✅' : '❌'}\nTítulo: ${
+      analysis.titleCheck ? '✅' : '❌'
+    }`;
 
     await enviarNotificacionTelegram(mensaje);
   }
@@ -134,15 +136,13 @@ const publicarAprobados = async () => {
   const aprobados = await Report.find({ aprobado: true });
   for (const report of aprobados) {
     const analysis = await analyzeUrl(report.enlace);
+    const countryInfo = getCountryInfo(report.telefono);
 
-    const mensaje = `🚨 NUEVA CAMPAÑA DE PHISHING DETECTADA 🚨
-Entidad suplantada: ${
+    const mensaje = `🚨 NUEVA CAMPAÑA DE PHISHING DETECTADA 🚨\nEntidad suplantada: ${
       analysis.identifiedBrand ? analysis.identifiedBrand : 'Desconocida'
-    }
---
-🔁 Retweetea para avisar a más gente.
-🔨 Reporta los SMS maliciosos que te lleguen en 
-https://scam-hammer.com/`;
+    } Origen: ${
+      countryInfo.flag
+    }\n--\n🔁 Retweetea para avisar a más gente.\n🔨 Reporta los SMS maliciosos que te lleguen en\nhttps://scam-hammer.com/`;
     try {
       await twitterClient.v2.tweet(mensaje);
       console.log('Tweet publicado exitosamente');

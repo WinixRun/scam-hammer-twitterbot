@@ -80,7 +80,7 @@ Report.watch().on('change', async (change) => {
 
     // Enviar enlace de aprobación a Telegram
     const enlaceOfuscado = ofuscarEnlace(newReport.enlace);
-    const mensaje = `Nuevo intento de phishing detectado:\nEnlace: ${enlaceOfuscado}\nTeléfono: ${newReport.telefono}\nAprobar: http://localhost:${process.env.PORT}/aprobar/${tokenValue}`;
+    const mensaje = `Nuevo intento de phishing detectado:\nEnlace: ${enlaceOfuscado}\nTeléfono: ${newReport.telefono}\nAprobar: https://scam-hammer.com/aprobar/${tokenValue}`;
 
     await enviarNotificacionTelegram(mensaje);
   }
@@ -120,15 +120,17 @@ app.get('/aprobar/:token', async (req, res) => {
 const publicarAprobados = async () => {
   const aprobados = await Report.find({ aprobado: true });
   for (const report of aprobados) {
-    const mensaje = ` 
+    const mensaje = `🤖 Mensaje automático 
 🚨 NUEVA CAMPAÑA DE PHISHING DETECTADA 🚨
 
 Consejos: 
+
 ☎️ Bloquea el número atacante: ${report.telefono}
+
 🔁 Retweetea para avisar a más gente.
+
 🔨 Reporta los SMS maliciosos que te lleguen en 
 https://scam-hammer.com/`;
-
     try {
       await twitterClient.v2.tweet(mensaje);
       console.log('Tweet publicado exitosamente');
@@ -146,5 +148,5 @@ setInterval(publicarAprobados, 60000); // Cada 60 segundos
 // Iniciar el servidor
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Servidor ejecutándose en http://localhost:${PORT}`);
+  console.log(`Servidor ejecutándose en https://scam-hammer.com:${PORT}`);
 });

@@ -7,6 +7,7 @@ const axios = require('axios');
 const crypto = require('crypto');
 const { analyzeUrl } = require('./siteAnalysis');
 
+// Configuración de la API de Twitter
 const twitterClient = new TwitterApi({
   appKey: process.env.TWITTER_API_KEY,
   appSecret: process.env.TWITTER_API_SECRET_KEY,
@@ -14,9 +15,11 @@ const twitterClient = new TwitterApi({
   accessSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET,
 });
 
+// Configuración de Telegram
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = parseInt(process.env.TELEGRAM_CHAT_ID, 10);
 
+// Función para enviar notificación a Telegram
 const enviarNotificacionTelegram = async (mensaje) => {
   const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
   try {
@@ -33,6 +36,7 @@ const enviarNotificacionTelegram = async (mensaje) => {
   }
 };
 
+// Configuración de MongoDB
 const MONGODB_URI = process.env.MONGODB_URI;
 mongoose
   .connect(MONGODB_URI)
@@ -43,6 +47,7 @@ mongoose
     console.error('Error al conectar a MongoDB:', err);
   });
 
+// Definir el esquema y modelo de datos de phishing
 const reportSchema = new mongoose.Schema({
   enlace: String,
   telefono: String,
@@ -116,12 +121,9 @@ app.get('/aprobar/:token', async (req, res) => {
 const publicarAprobados = async () => {
   const aprobados = await Report.find({ aprobado: true });
   for (const report of aprobados) {
-    const mensaje = `🚨 NUEVA CAMPAÑA DE PHISHING DETECTADA 🚨
-🔗 Enlace: ${ofuscarEnlace(report.enlace)}
-Entidad suplantada: ${report.entidadSuplantada || 'Desconocida'}
-🔁 Retweetea para avisar a más gente.
-🔨 Reporta los SMS maliciosos que te lleguen en 
-https://scam-hammer.com/`;
+    const mensaje = `🚨 NUEVA CAMPAÑA DE PHISHING DETECTADA 🚨\n🔗 Enlace: ${ofuscarEnlace(
+      report.enlace
+    )}\nConsejos:\n☎️ Bloquea el número de teléfono.\n🔁 Retweetea para avisar a más gente.\n🔨 Reporta los SMS maliciosos que te lleguen en\nhttps://scam-hammer.com/`;
     try {
       await twitterClient.v2.tweet(mensaje);
       console.log('Tweet publicado exitosamente:', mensaje);
@@ -135,6 +137,7 @@ https://scam-hammer.com/`;
 
 setInterval(publicarAprobados, 60000);
 
+// Iniciar el servidor
 const PORT = process.env.PORT || 7331;
 app.listen(PORT, () => {
   console.log(`Servidor ejecutándose en https://scam-hammer.com:${PORT}`);

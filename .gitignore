@@ -1,0 +1,9 @@
+# Ignore node_modules
+node_modules/
+
+# Ignore .env file
+.env
+
+# Other ignores
+.DS_Store
+npm-debug.log

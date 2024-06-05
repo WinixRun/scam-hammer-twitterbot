@@ -146,7 +146,7 @@ https://scam-hammer.com/`;
 setInterval(publicarAprobados, 60000); // Cada 60 segundos
 
 // Iniciar el servidor
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 7331;
 app.listen(PORT, () => {
   console.log(`Servidor ejecutándose en https://scam-hammer.com:${PORT}`);
 });

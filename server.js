@@ -5,7 +5,7 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const axios = require('axios');
 const crypto = require('crypto');
-const { analyzeUrl } = require('./siteAnalysis');
+const { analyzeUrl, getCountryInfo } = require('./siteAnalysis');
 
 // Configuración de la API de Twitter
 const twitterClient = new TwitterApi({
@@ -27,7 +27,6 @@ const enviarNotificacionTelegram = async (mensaje) => {
       chat_id: TELEGRAM_CHAT_ID,
       text: mensaje,
     });
-    console.log('Mensaje enviado a Telegram:', mensaje);
   } catch (error) {
     console.error(
       'Error enviando mensaje a Telegram:',
@@ -62,55 +61,67 @@ const tokenSchema = new mongoose.Schema({
 });
 const Token = mongoose.model('Token', tokenSchema);
 
+// Configuración del servidor Express
 const app = express();
 app.use(bodyParser.json());
 
+// Función para ofuscar enlaces
 const ofuscarEnlace = (enlace) =>
   enlace.replace(/\./g, '[dot]').replace(/\//g, '[slash]');
 
+// Escuchar cambios en la base de datos y generar un token automáticamente
 Report.watch().on('change', async (change) => {
   if (change.operationType === 'insert') {
     const newReport = change.fullDocument;
 
+    // Generar token automáticamente
     const tokenValue = crypto.randomBytes(32).toString('hex');
     const token = new Token({ token: tokenValue, reportId: newReport._id });
     await token.save();
 
-    console.log('Nuevo reporte insertado:', newReport);
+    // Análisis de la URL
+    const analysis = await analyzeUrl(newReport.enlace);
 
-    const entidadSuplantada = await analyzeUrl(newReport.enlace);
+    // Obtener información del país
+    const countryInfo = getCountryInfo(newReport.telefono);
 
+    // Enviar enlace de aprobación a Telegram con análisis
     const enlaceOfuscado = ofuscarEnlace(newReport.enlace);
     const mensaje = `Nuevo intento de phishing detectado:\nEnlace: ${enlaceOfuscado}\nTeléfono: ${
       newReport.telefono
-    }\nEntidad suplantada: ${
-      entidadSuplantada || 'Desconocida'
-    }\nAprobar: https://scam-hammer.com/aprobar/${tokenValue}`;
+    } ${
+      countryInfo.flag
+    }\nAprobar: https://scam-hammer.com/aprobar/${tokenValue}\n\nAnálisis:\nURL: ${
+      analysis.urlCheck ? '✅' : '❌'
+    }\nTítulo: ${analysis.titleCheck ? '✅' : '❌'}`;
 
     await enviarNotificacionTelegram(mensaje);
   }
 });
 
+// Endpoint para aprobar un phishing report
 app.get('/aprobar/:token', async (req, res) => {
   try {
     const { token: tokenValue } = req.params;
 
+    // Buscar el token en la base de datos
     const token = await Token.findOne({ token: tokenValue });
     if (!token) {
       console.error('Token not found or expired');
       return res.status(404).send('Token not found or expired');
     }
 
+    // Buscar el reporte asociado al token
     const report = await Report.findById(token.reportId);
     if (!report) {
       console.error('Report not found');
       return res.status(404).send('Report not found');
     }
 
+    // Marcar el reporte como aprobado y eliminar el token
     report.aprobado = true;
     await report.save();
-    await Token.deleteOne({ token: tokenValue });
-    console.log('Reporte aprobado:', report);
+    await Token.deleteOne({ token: tokenValue }); // Eliminar el token inmediatamente después de su uso
     res.send('Report approved');
   } catch (error) {
     console.error('Error al aprobar el reporte:', error);
@@ -118,16 +129,24 @@ app.get('/aprobar/:token', async (req, res) => {
   }
 });
 
+// Publicar en Twitter los reportes aprobados
 const publicarAprobados = async () => {
   const aprobados = await Report.find({ aprobado: true });
   for (const report of aprobados) {
-    const mensaje = `🚨 NUEVA CAMPAÑA DE PHISHING DETECTADA 🚨\n🔗 Enlace: ${ofuscarEnlace(
-      report.enlace
-    )}\nConsejos:\n☎️ Bloquea el número de teléfono.\n🔁 Retweetea para avisar a más gente.\n🔨 Reporta los SMS maliciosos que te lleguen en\nhttps://scam-hammer.com/`;
+    const analysis = await analyzeUrl(report.enlace);
+
+    const mensaje = `🚨 NUEVA CAMPAÑA DE PHISHING DETECTADA 🚨
+Entidad suplantada: ${
+      analysis.identifiedBrand ? analysis.identifiedBrand : 'Desconocida'
+    }
+--
+🔁 Retweetea para avisar a más gente.
+🔨 Reporta los SMS maliciosos que te lleguen en 
+https://scam-hammer.com/`;
     try {
       await twitterClient.v2.tweet(mensaje);
-      console.log('Tweet publicado exitosamente:', mensaje);
-      report.aprobado = false;
+      console.log('Tweet publicado exitosamente');
+      report.aprobado = false; // Reset para evitar republicación
       await report.save();
     } catch (error) {
       console.error('Error al publicar el tweet:', error);
@@ -135,7 +154,8 @@ const publicarAprobados = async () => {
   }
 };
 
-setInterval(publicarAprobados, 60000);
+// Ejecutar la función de publicación cada cierto intervalo
+setInterval(publicarAprobados, 60000); // Cada 60 segundos
 
 // Iniciar el servidor
 const PORT = process.env.PORT || 7331;

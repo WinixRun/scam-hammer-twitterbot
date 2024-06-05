@@ -5,8 +5,8 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const axios = require('axios');
 const crypto = require('crypto');
+const { analyzeUrl } = require('./siteAnalysis');
 
-// Configuración de la API de Twitter
 const twitterClient = new TwitterApi({
   appKey: process.env.TWITTER_API_KEY,
   appSecret: process.env.TWITTER_API_SECRET_KEY,
@@ -14,11 +14,9 @@ const twitterClient = new TwitterApi({
   accessSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET,
 });
 
-// Configuración de Telegram
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = parseInt(process.env.TELEGRAM_CHAT_ID, 10);
 
-// Función para enviar notificación a Telegram
 const enviarNotificacionTelegram = async (mensaje) => {
   const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
   try {
@@ -26,6 +24,7 @@ const enviarNotificacionTelegram = async (mensaje) => {
       chat_id: TELEGRAM_CHAT_ID,
       text: mensaje,
     });
+    console.log('Mensaje enviado a Telegram:', mensaje);
   } catch (error) {
     console.error(
       'Error enviando mensaje a Telegram:',
@@ -34,7 +33,6 @@ const enviarNotificacionTelegram = async (mensaje) => {
   }
 };
 
-// Configuración de MongoDB
 const MONGODB_URI = process.env.MONGODB_URI;
 mongoose
   .connect(MONGODB_URI)
@@ -45,7 +43,6 @@ mongoose
     console.error('Error al conectar a MongoDB:', err);
   });
 
-// Definir el esquema y modelo de datos de phishing
 const reportSchema = new mongoose.Schema({
   enlace: String,
   telefono: String,
@@ -60,55 +57,55 @@ const tokenSchema = new mongoose.Schema({
 });
 const Token = mongoose.model('Token', tokenSchema);
 
-// Configuración del servidor Express
 const app = express();
 app.use(bodyParser.json());
 
-// Función para ofuscar enlaces
 const ofuscarEnlace = (enlace) =>
   enlace.replace(/\./g, '[dot]').replace(/\//g, '[slash]');
 
-// Escuchar cambios en la base de datos y generar un token automáticamente
 Report.watch().on('change', async (change) => {
   if (change.operationType === 'insert') {
     const newReport = change.fullDocument;
 
-    // Generar token automáticamente
     const tokenValue = crypto.randomBytes(32).toString('hex');
     const token = new Token({ token: tokenValue, reportId: newReport._id });
     await token.save();
 
-    // Enviar enlace de aprobación a Telegram
+    console.log('Nuevo reporte insertado:', newReport);
+
+    const entidadSuplantada = await analyzeUrl(newReport.enlace);
+
     const enlaceOfuscado = ofuscarEnlace(newReport.enlace);
-    const mensaje = `Nuevo intento de phishing detectado:\nEnlace: ${enlaceOfuscado}\nTeléfono: ${newReport.telefono}\nAprobar: https://scam-hammer.com/aprobar/${tokenValue}`;
+    const mensaje = `Nuevo intento de phishing detectado:\nEnlace: ${enlaceOfuscado}\nTeléfono: ${
+      newReport.telefono
+    }\nEntidad suplantada: ${
+      entidadSuplantada || 'Desconocida'
+    }\nAprobar: https://scam-hammer.com/aprobar/${tokenValue}`;
 
     await enviarNotificacionTelegram(mensaje);
   }
 });
 
-// Endpoint para aprobar un phishing report
 app.get('/aprobar/:token', async (req, res) => {
   try {
     const { token: tokenValue } = req.params;
 
-    // Buscar el token en la base de datos
     const token = await Token.findOne({ token: tokenValue });
     if (!token) {
       console.error('Token not found or expired');
       return res.status(404).send('Token not found or expired');
     }
 
-    // Buscar el reporte asociado al token
     const report = await Report.findById(token.reportId);
     if (!report) {
       console.error('Report not found');
       return res.status(404).send('Report not found');
     }
 
-    // Marcar el reporte como aprobado y eliminar el token
     report.aprobado = true;
     await report.save();
-    await Token.deleteOne({ token: tokenValue }); // Eliminar el token inmediatamente después de su uso
+    await Token.deleteOne({ token: tokenValue });
+    console.log('Reporte aprobado:', report);
     res.send('Report approved');
   } catch (error) {
     console.error('Error al aprobar el reporte:', error);
@@ -116,21 +113,19 @@ app.get('/aprobar/:token', async (req, res) => {
   }
 });
 
-// Publicar en Twitter los reportes aprobados
 const publicarAprobados = async () => {
   const aprobados = await Report.find({ aprobado: true });
   for (const report of aprobados) {
     const mensaje = `🚨 NUEVA CAMPAÑA DE PHISHING DETECTADA 🚨
-Atacante: ${report.telefono}
-Consejos: 
-☎️ Bloquea el número de teléfono.
+🔗 Enlace: ${ofuscarEnlace(report.enlace)}
+Entidad suplantada: ${report.entidadSuplantada || 'Desconocida'}
 🔁 Retweetea para avisar a más gente.
 🔨 Reporta los SMS maliciosos que te lleguen en 
 https://scam-hammer.com/`;
     try {
       await twitterClient.v2.tweet(mensaje);
-      console.log('Tweet publicado exitosamente');
-      report.aprobado = false; // Reset para evitar republicación
+      console.log('Tweet publicado exitosamente:', mensaje);
+      report.aprobado = false;
       await report.save();
     } catch (error) {
       console.error('Error al publicar el tweet:', error);
@@ -138,10 +133,8 @@ https://scam-hammer.com/`;
   }
 };
 
-// Ejecutar la función de publicación cada cierto intervalo
-setInterval(publicarAprobados, 60000); // Cada 60 segundos
+setInterval(publicarAprobados, 60000);
 
-// Iniciar el servidor
 const PORT = process.env.PORT || 7331;
 app.listen(PORT, () => {
   console.log(`Servidor ejecutándose en https://scam-hammer.com:${PORT}`);

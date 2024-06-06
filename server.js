@@ -141,16 +141,16 @@ const publicarAprobados = async () => {
   const aprobados = await Report.find({ aprobado: true });
   for (const report of aprobados) {
     const analysis = await analyzeUrl(report.enlace);
-    const domain = extractDomain(report.enlace);
     const countryInfo = getCountryInfo(report.telefono);
 
     const mensaje = `🚨 PHISHING DETECTADO 🚨
 Entidad: ${analysis.identifiedBrand ? analysis.identifiedBrand : 'Desconocida'}
 Origen: ${countryInfo.flag}
-Dominio: ${domain}
+⚠️ Extrema la precaución con SMS de esta entidad.
 --
 🔁 Retweetea.
-🔨 Reporta los SMS en https://scam-hammer.com/`;
+🔨 Reporta los SMS en scam-hammer.com
+`;
     try {
       await twitterClient.v2.tweet(mensaje);
       console.log('Tweet publicado exitosamente');

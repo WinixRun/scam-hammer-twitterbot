@@ -5,7 +5,11 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const axios = require('axios');
 const crypto = require('crypto');
-const { analyzeUrl, getCountryInfo } = require('./utils/siteAnalysis');
+const {
+  analyzeUrl,
+  getCountryInfo,
+  extractDomain,
+} = require('./utils/siteAnalysis');
 
 // Configuración de la API de Twitter
 const twitterClient = new TwitterApi({
@@ -81,20 +85,21 @@ Report.watch().on('change', async (change) => {
 
     // Análisis de la URL
     const analysis = await analyzeUrl(newReport.enlace);
+    const domain = extractDomain(newReport.enlace);
 
     // Obtener información del país
     const countryInfo = getCountryInfo(newReport.telefono);
 
     // Enviar enlace de aprobación a Telegram con análisis
-    const enlaceOfuscado = ofuscarEnlace(newReport.enlace);
-    const mensaje = `Nuevo intento de phishing detectado:\nEnlace: ${enlaceOfuscado}\nTeléfono: ${
+    const enlaceOfuscado = ofuscarEnlace(domain);
+    const mensaje = `Nuevo intento de phishing detectado:\nDominio: ${enlaceOfuscado}\nTeléfono: ${
       newReport.telefono
     } ${
       countryInfo.flag
-    }\nAprobar: https://scam-hammer.com/aprobar/${tokenValue}\n\nAnálisis:\nEntidad: ${
+    }\nAprobar: https://scam-hammer.com/aprobar/${tokenValue}\n\nAnálisis:\nURL: ${
+      analysis.urlCheck ? '✅' : '❌'
+    }\nTítulo: ${analysis.titleCheck ? '✅' : '❌'}\nEntidad suplantada: ${
       analysis.identifiedBrand ? analysis.identifiedBrand : 'Desconocida'
-    }\nURL: ${analysis.urlCheck ? '✅' : '❌'}\nTítulo: ${
-      analysis.titleCheck ? '✅' : '❌'
     }`;
 
     await enviarNotificacionTelegram(mensaje);
@@ -136,13 +141,16 @@ const publicarAprobados = async () => {
   const aprobados = await Report.find({ aprobado: true });
   for (const report of aprobados) {
     const analysis = await analyzeUrl(report.enlace);
+    const domain = extractDomain(report.enlace);
     const countryInfo = getCountryInfo(report.telefono);
 
-    const mensaje = `🚨 NUEVA CAMPAÑA DE PHISHING DETECTADA 🚨\nEntidad suplantada: ${
-      analysis.identifiedBrand ? analysis.identifiedBrand : 'Desconocida'
-    } Origen: ${
-      countryInfo.flag
-    }\n--\n🔁 Retweetea para avisar a más gente.\n🔨 Reporta los SMS maliciosos que te lleguen en\nhttps://scam-hammer.com/`;
+    const mensaje = `🚨 PHISHING DETECTADO 🚨
+Entidad: ${analysis.identifiedBrand ? analysis.identifiedBrand : 'Desconocida'}
+Origen: ${countryInfo.flag}
+Dominio: ${domain}
+--
+🔁 Retweetea.
+🔨 Reporta los SMS en https://scam-hammer.com/`;
     try {
       await twitterClient.v2.tweet(mensaje);
       console.log('Tweet publicado exitosamente');

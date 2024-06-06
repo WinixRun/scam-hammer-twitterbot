@@ -72,4 +72,9 @@ const getCountryInfo = (phoneNumber) => {
     : { country: 'Desconocido', flag: '❓' };
 };
 
-module.exports = { analyzeUrl, getCountryInfo };
+const extractDomain = (url) => {
+  const domain = new URL(url).hostname;
+  return domain;
+};
+
+module.exports = { analyzeUrl, getCountryInfo, extractDomain };

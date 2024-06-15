@@ -55,6 +55,7 @@ const reportSchema = new mongoose.Schema({
   enlace: String,
   telefono: String,
   aprobado: { type: Boolean, default: false },
+  entidadSuplantada: String, // Nuevo campo para la entidad suplantada
 });
 const Report = mongoose.model('Report', reportSchema, 'reports');
 
@@ -86,6 +87,10 @@ Report.watch().on('change', async (change) => {
     // Análisis de la URL
     const analysis = await analyzeUrl(newReport.enlace);
     const domain = extractDomain(newReport.enlace);
+
+    // Actualizar el reporte con la entidad suplantada
+    newReport.entidadSuplantada = analysis.identifiedBrand;
+    await Report.updateOne({ _id: newReport._id }, newReport);
 
     // Obtener información del país
     const countryInfo = getCountryInfo(newReport.telefono);
